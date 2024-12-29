@@ -6,8 +6,6 @@ namespace Chanlange.ListNodeSerializer
 	{
 		static async Task Main(string[] args)
 		{
-			Console.WriteLine("Hello, World!");
-
 			var serializer = new MySerializer();
 
 			// Build a small list manually
