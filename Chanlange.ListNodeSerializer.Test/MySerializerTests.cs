@@ -1,11 +1,9 @@
-using System;
-using System.IO;
-using Xunit;
+using Chanlange.ListNodeSerializer.Interfaces;
 using Chanlange.ListNodeSerializer.Nodes;
 
 namespace Chanlange.ListNodeSerializer.Test
 {
-	public class MySerializerTests
+	public class SerializerTests
 	{
 		/// <summary>
 		/// Basic test (original example):
@@ -14,31 +12,26 @@ namespace Chanlange.ListNodeSerializer.Test
 		/// - DeepCopies
 		/// - Checks structural equivalence and independence.
 		/// </summary>
-		[Fact]
-		public void Test1()
+		[Theory]
+		[InlineData("Default")]
+		[InlineData("MemoryOptimized")]
+		public void BasicTest(string serializerType)
 		{
-			// Arrange
-			var serializer = new MySerializer();
+			var serializer = CreateSerializer(serializerType);
 			var head = BuildTestList();
 
-			// Act #1: Serialize -> Deserialize
 			using var ms = new MemoryStream();
 			serializer.Serialize(head, ms).GetAwaiter().GetResult();
 			ms.Position = 0;
 			var deserializedHead = serializer.Deserialize(ms).GetAwaiter().GetResult();
 
-			// Assert #1: Ensure the deserialized list is structurally equivalent
 			Assert.True(CompareHelpers.AreListsEquivalent(head, deserializedHead),
-				"Deserialized list should be equivalent to the original.");
+				$"Deserialized list should match the original. ({serializerType})");
 
-			// Act #2: DeepCopy
 			var copiedHead = serializer.DeepCopy(head).GetAwaiter().GetResult();
-
-			// Assert #2: The deep-copied list is also structurally equivalent
 			Assert.True(CompareHelpers.AreListsEquivalent(head, copiedHead),
-				"Deep-copied list should be equivalent to the original.");
+				$"Deep-copied list should match the original. ({serializerType})");
 
-			// Optional Assert #3: Check that modifications in the copy do not affect the original
 			copiedHead.Data = "Mutated Head Data";
 			Assert.NotEqual(head.Data, copiedHead.Data);
 		}
@@ -47,10 +40,12 @@ namespace Chanlange.ListNodeSerializer.Test
 		/// 1) Empty list test.
 		/// Ensures the serializer handles null (empty list) correctly.
 		/// </summary>
-		[Fact]
-		public void EmptyListTest()
+		[Theory]
+		[InlineData("Default")]
+		[InlineData("MemoryOptimized")]
+		public void EmptyListTest(string serializerType)
 		{
-			var serializer = new MySerializer();
+			var serializer = CreateSerializer(serializerType);
 			ListNode head = null;
 
 			using var ms = new MemoryStream();
@@ -68,10 +63,12 @@ namespace Chanlange.ListNodeSerializer.Test
 		/// 2) Single-node list (Random = null).
 		/// Checks basic Next/Previous/Random fields and deep copy independence.
 		/// </summary>
-		[Fact]
-		public void SingleNodeTest()
+		[Theory]
+		[InlineData("Default")]
+		[InlineData("MemoryOptimized")]
+		public void SingleNodeTest(string serializerType)
 		{
-			var serializer = new MySerializer();
+			var serializer = CreateSerializer(serializerType);
 			var singleNode = new ListNode { Data = "Single", Random = null };
 
 			using var ms = new MemoryStream();
@@ -85,7 +82,6 @@ namespace Chanlange.ListNodeSerializer.Test
 			Assert.Null(deserialized.Random);
 			Assert.Equal("Single", deserialized.Data);
 
-			// DeepCopy
 			var copied = serializer.DeepCopy(singleNode).GetAwaiter().GetResult();
 			Assert.NotNull(copied);
 			Assert.Equal("Single", copied.Data);
@@ -93,7 +89,6 @@ namespace Chanlange.ListNodeSerializer.Test
 			Assert.Null(copied.Previous);
 			Assert.Null(copied.Random);
 
-			// Ensure they are not the same object
 			Assert.NotSame(singleNode, copied);
 		}
 
@@ -101,10 +96,13 @@ namespace Chanlange.ListNodeSerializer.Test
 		/// 2.1) Single-node list with Random pointing to itself.
 		/// Ensures the serializer/deserializer restores self-referencing random.
 		/// </summary>
-		[Fact]
-		public void SingleNodeSelfRandomTest()
+
+		[Theory]
+		[InlineData("Default")]
+		[InlineData("MemoryOptimized")]
+		public void SingleNodeSelfRandomTest(string serializerType)
 		{
-			var serializer = new MySerializer();
+			var serializer = CreateSerializer(serializerType);
 			var singleNode = new ListNode { Data = "SelfRandom" };
 			singleNode.Random = singleNode; // Random -> self
 
@@ -115,11 +113,8 @@ namespace Chanlange.ListNodeSerializer.Test
 
 			Assert.NotNull(deserialized);
 			Assert.Equal("SelfRandom", deserialized.Data);
-
-			// The Random should point to itself
 			Assert.Same(deserialized, deserialized.Random);
 
-			// DeepCopy
 			var copied = serializer.DeepCopy(singleNode).GetAwaiter().GetResult();
 			Assert.NotNull(copied);
 			Assert.Equal("SelfRandom", copied.Data);
@@ -132,10 +127,12 @@ namespace Chanlange.ListNodeSerializer.Test
 		/// Random -> self, Random -> tail, Random -> null, etc.
 		/// Ensures the serializer handles multiple scenarios in the same list.
 		/// </summary>
-		[Fact]
-		public void RandomVariousPositionsTest()
+		[Theory]
+		[InlineData("Default")]
+		[InlineData("MemoryOptimized")]
+		public void RandomVariousPositionsTest(string serializerType)
 		{
-			var serializer = new MySerializer();
+			var serializer = CreateSerializer(serializerType);
 
 			var node1 = new ListNode { Data = "N1" };
 			var node2 = new ListNode { Data = "N2" };
@@ -147,7 +144,6 @@ namespace Chanlange.ListNodeSerializer.Test
 			node2.Next = node3; node3.Previous = node2;
 			node3.Next = node4; node4.Previous = node3;
 
-			// Random setup
 			node1.Random = node1; // self
 			node2.Random = node4; // tail
 			node3.Random = null;  // none
@@ -159,14 +155,12 @@ namespace Chanlange.ListNodeSerializer.Test
 			var deserializedHead = serializer.Deserialize(ms).GetAwaiter().GetResult();
 
 			Assert.True(CompareHelpers.AreListsEquivalent(node1, deserializedHead),
-				"Deserialized list should match structure and random links.");
+				$"RandomVariousPositionsTest failed. ({serializerType})");
 
-			// Deep copy
 			var copyHead = serializer.DeepCopy(node1).GetAwaiter().GetResult();
 			Assert.True(CompareHelpers.AreListsEquivalent(node1, copyHead),
-				"Deep-copied list should match structure and random links.");
+				$"DeepCopy mismatch. ({serializerType})");
 
-			// Ensure not referencing the exact same objects
 			Assert.NotSame(node1, copyHead);
 		}
 
@@ -174,10 +168,12 @@ namespace Chanlange.ListNodeSerializer.Test
 		/// 4) Multiple nodes, all Random = null.
 		/// Ensures the serializer correctly handles no random references at all.
 		/// </summary>
-		[Fact]
-		public void AllRandomNullTest()
+		[Theory]
+		[InlineData("Default")]
+		[InlineData("MemoryOptimized")]
+		public void AllRandomNullTest(string serializerType)
 		{
-			var serializer = new MySerializer();
+			var serializer = CreateSerializer(serializerType);
 
 			var node1 = new ListNode { Data = "A1" };
 			var node2 = new ListNode { Data = "A2" };
@@ -188,29 +184,29 @@ namespace Chanlange.ListNodeSerializer.Test
 			node2.Next = node3; node3.Previous = node2;
 			node3.Next = node4; node4.Previous = node3;
 
-			// No random references
-
 			using var ms = new MemoryStream();
 			serializer.Serialize(node1, ms).GetAwaiter().GetResult();
 			ms.Position = 0;
 			var deserialized = serializer.Deserialize(ms).GetAwaiter().GetResult();
 
 			Assert.True(CompareHelpers.AreListsEquivalent(node1, deserialized),
-				"All random references are null, structure should match exactly.");
+				$"AllRandomNullTest failed. ({serializerType})");
 
 			var copied = serializer.DeepCopy(node1).GetAwaiter().GetResult();
 			Assert.True(CompareHelpers.AreListsEquivalent(node1, copied),
-				"Deep-copied list should match the original structure with null random references.");
+				$"DeepCopy mismatch for AllRandomNullTest. ({serializerType})");
 		}
 
 		/// <summary>
 		/// 5) Nodes with different Data strings: empty, null, Unicode.
 		/// Ensures string serialization/deserialization is handled properly.
 		/// </summary>
-		[Fact]
-		public void NodeWithEmptyAndNullDataTest()
+		[Theory]
+		[InlineData("Default")]
+		[InlineData("MemoryOptimized")]
+		public void NodeWithEmptyAndNullDataTest(string serializerType)
 		{
-			var serializer = new MySerializer();
+			var serializer = CreateSerializer(serializerType);
 
 			var node1 = new ListNode { Data = "" };
 			var node2 = new ListNode { Data = null };
@@ -229,40 +225,53 @@ namespace Chanlange.ListNodeSerializer.Test
 			var deserialized = serializer.Deserialize(ms).GetAwaiter().GetResult();
 
 			Assert.True(CompareHelpers.AreListsEquivalent(node1, deserialized),
-				"Deserialized list should match node1 with mixed data (empty, null, Unicode).");
+				$"NodeWithEmptyAndNullDataTest failed. ({serializerType})");
 
 			var copied = serializer.DeepCopy(node1).GetAwaiter().GetResult();
 			Assert.True(CompareHelpers.AreListsEquivalent(node1, copied),
-				"Deep-copied list should also match.");
+				$"DeepCopy mismatch for NodeWithEmptyAndNullDataTest. ({serializerType})");
 		}
 
 		/// <summary>
 		/// 6) Repeated serialization/deserialization
 		/// to ensure no corruption over multiple cycles.
 		/// </summary>
-		[Fact]
-		public void RepeatedSerializeDeserializeTest()
+		[Theory]
+		[InlineData("Default")]
+		[InlineData("MemoryOptimized")]
+		public void RepeatedSerializeDeserializeTest(string serializerType)
 		{
-			var serializer = new MySerializer();
+			var serializer = CreateSerializer(serializerType);
 			var head = BuildTestList();
 
-			// 1) First round: Serialize -> Deserialize
 			using var ms1 = new MemoryStream();
 			serializer.Serialize(head, ms1).GetAwaiter().GetResult();
 			ms1.Position = 0;
 			var d1 = serializer.Deserialize(ms1).GetAwaiter().GetResult();
 
 			Assert.True(CompareHelpers.AreListsEquivalent(head, d1),
-				"First deserialization must match the original.");
+				$"First round mismatch. ({serializerType})");
 
-			// 2) Second round: Serialize -> Deserialize (based on d1)
 			using var ms2 = new MemoryStream();
 			serializer.Serialize(d1, ms2).GetAwaiter().GetResult();
 			ms2.Position = 0;
 			var d2 = serializer.Deserialize(ms2).GetAwaiter().GetResult();
 
 			Assert.True(CompareHelpers.AreListsEquivalent(d1, d2),
-				"Second deserialization must match d1 (and thus the original).");
+				$"Second round mismatch. ({serializerType})");
+		}
+
+		/// <summary>
+		/// Helper to create a serializer based on a string identifier
+		/// </summary>
+		private IListSerializer CreateSerializer(string serializerType)
+		{
+			return serializerType switch
+			{
+				"Default" => new MySerializer(),
+				"MemoryOptimized" => new MyMemoryOptimizedSerializer(),
+				_ => throw new ArgumentException($"Unknown serializer type: {serializerType}")
+			};
 		}
 
 		/// <summary>
