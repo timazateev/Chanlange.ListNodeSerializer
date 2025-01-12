@@ -140,7 +140,7 @@ namespace Chanlange.ListNodeSerializer
 			}
 
 			// Now let's set Random pointers in a random manner
-			Random rnd = new Random();
+			Random rnd = new();
 			int n = allNodes.Count;
 
 			// Example approach: for each node, we pick a random index in [0, n), 
